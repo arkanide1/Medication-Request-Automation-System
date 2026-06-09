@@ -1,0 +1,371 @@
+{
+  "name": "project_final",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Chercher Medicament",
+        "formDescription": "Ce formulaire serve à chercher des informations sur un médicament saisi, notamment son prix, sa disponibilité en pharmacie et sa description. Si le médicament est disponible dans notre base de données locale, vous recevrez immédiatement les détails. Sinon, une recherche en ligne sera effectuée automatiquement, et les résultats vous seront envoyés par e-mail ou via Telegram.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Nom médicament ",
+              "placeholder": "Entrer un nom du médicament ",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -1740,
+        300
+      ],
+      "id": "bc862053-2174-4257-9f9c-d4543a420b15",
+      "name": "Formulaire de soumission de nom de medicament",
+      "webhookId": "61f01a50-71a5-4de3-8306-f4891b1bfa75"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "18f2d8b2-751a-4081-b5e4-d05188fdf272",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "=exists",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1320,
+        300
+      ],
+      "id": "efa101d5-e999-4ff1-9e87-e1804405e573",
+      "name": "Test de existence dans la base de donnés"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:10001/chercher_medicament",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "nom",
+              "value": "={{ $json[\"Nom médicament \"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1520,
+        300
+      ],
+      "id": "34679e41-5d77-4413-bedb-2f10ea2d224f",
+      "name": "MCP SQLITE SERVER"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Assistant de Requête de Médicaments\nRôle\nVous êtes un assistant professionnel spécialisé dans le traitement des demandes de médicaments. Votre mission est de fournir des informations précises sur les médicaments demandés par les clients.\nSources de données disponibles\nVous avez accès à ces sources de données:\n\nBase de données locale (MCP SQLITE SERVER)\nRésultats de recherche web (si le médicament n'est pas disponible localement)\n\nEntrées\nCes données sont disponibles à partir de n8n:\n\nNom du médicament: {{ $('Formulaire de soumission de nom de medicament').item.json['Nom médicament '] }}\nEmail du client: mohamedouaquad@gmail.com \nStatut dans la base de données locale:{{ $('MCP SQLITE SERVER').item.json.status }}\n{{ $('MCP SQLITE SERVER').item.json.resultats[0].libelle }}\n{{ $('MCP SQLITE SERVER').item.json.resultats[0].prix }}\nDonnées web (si disponibles):\nDescription: {{ $json.data.description }}\nPrix: {{ $json.data.prix }}\n\nLogique de traitement\n\nVérifiez si le médicament existe dans la base de données locale:\n\nSi le statut est \"exists\", utilisez les données locales\nSi le statut est \"not_exists\", utilisez les données de recherche web\n\n\nPour un médicament trouvé localement:\n\nRécupérez le nom, prix, pharmacie et quantité disponible\nGénérez un email informatif avec ces données\nCréez un court message audio pour Telegram\n\n\nPour un médicament non disponible localement:\n\nUtilisez les données de recherche web (description et prix)\nGénérez un email expliquant que le médicament n'est pas disponible mais en fournissant les informations trouvées\nCréez un court message audio pour Telegram\n\nFormat de sortie\nVous devez générer un JSON valide au format suivant, sans aucun texte supplémentaire:\njson{\n  \"email\": {\n    \"to\": \"mohamedouaquad@gmail.com\",\n    \"subject\": \"Information sur le médicament {{ $('Formulaire de soumission de nom de medicament').item.json['Nom médicament '] }}\",\n    \"body\": \"Corps de l'email formaté professionnellement\"\n  },\n  \"telegram_audio\": \"Texte court (max 100 mots) à convertir en audio pour Telegram\"\n}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        -720,
+        40
+      ],
+      "id": "69a5501f-2ee7-4901-85cf-72df9e6421b7",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Récupère la sortie de l'agent IA\nconst agentOutput = $json[\"output\"];\n\n// Extrait le bloc JSON à partir de ```json ... ```\nconst match = agentOutput.match(/```json\\s*([\\s\\S]*?)\\s*```/);\n\nif (!match) {\n  throw new Error(\"Aucun bloc JSON valide trouvé dans la sortie.\");\n}\n\nlet parsed;\ntry {\n  parsed = JSON.parse(match[1]);\n} catch (e) {\n  throw new Error(\"Erreur de parsing JSON : \" + e.message);\n}\n\n// Retourne l'objet structuré prêt à être envoyé à Gmail/Telegram\nreturn [\n  {\n    json: {\n      email: parsed.email,\n      telegram_audio: parsed.telegram_audio\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -280,
+        20
+      ],
+      "id": "87d5a337-3a11-453e-8746-54ff73aa4788",
+      "name": "Code transformation de données texte au json1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:10001/search_web",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recherche",
+              "value": "={{ $('Formulaire de soumission de nom de medicament').item.json['Nom médicament '] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1060,
+        320
+      ],
+      "id": "50237d64-1a71-40e9-8692-11cf9991acc8",
+      "name": "Script de la recherche dans Web"
+    },
+    {
+      "parameters": {
+        "content": "Cette Condition teste si le medicament existe dans notre base de donne ou non il se base sur un status recupere depuis MCP SQLITE SERVER si Status == exists il envoie un email contenant la descrition de ce medicament sinon il envoie la requette vers le autre serveur",
+        "width": 340,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1520,
+        120
+      ],
+      "typeVersion": 1,
+      "id": "5419b2f3-eba7-4bbd-9e61-109ebcb041ca",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Ce code permet de coonvertir la sortie de AI agent a un json contenant les informations nessecaire pour l'envoie d'email ainsi de voice note",
+        "height": 100,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -540,
+        240
+      ],
+      "typeVersion": 1,
+      "id": "5e9db2b3-8829-4e83-a91c-8e7bbf9bdc03",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        260
+      ],
+      "id": "fe0571fa-8953-42a1-9eac-fb51d5298c67",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "FAV1tpcYkwo2lXGI",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "mohamedouaquad@gmail.com",
+        "toEmail": "={{ $json.email.to }}",
+        "subject": "={{ $json.email.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.email.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        60,
+        -60
+      ],
+      "id": "a1469319-98ab-4274-928b-32fef9a14b49",
+      "name": "Send Email",
+      "webhookId": "c27798e7-2f3d-4cd5-b399-8e677ce8f940",
+      "credentials": {
+        "smtp": {
+          "id": "l4lXXRBBHtDS6kD1",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:10001/text_to_speech",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $json.telegram_audio }}"
+            },
+            {
+              "name": "lang",
+              "value": "fr"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        300
+      ],
+      "id": "6d313595-6d0d-47bb-b217-3354dbf1ee71",
+      "name": "Send Audio to telegram",
+      "alwaysOutputData": false
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Formulaire de soumission de nom de medicament": {
+      "main": [
+        [
+          {
+            "node": "MCP SQLITE SERVER",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test de existence dans la base de donnés": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Script de la recherche dans Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP SQLITE SERVER": {
+      "main": [
+        [
+          {
+            "node": "Test de existence dans la base de donnés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code transformation de données texte au json1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code transformation de données texte au json1": {
+      "main": [
+        [
+          {
+            "node": "Send Audio to telegram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Script de la recherche dans Web": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        []
+      ]
+    },
+    "Send Audio to telegram": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7427ece1-905c-4caf-9f6a-41686eae776e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4050db46db8ba1e8d2ec6300de6860495032d4df0e6b0685ea78729345534ccb"
+  },
+  "id": "O1vEb1fYrfcgq61M",
+  "tags": []
+}
