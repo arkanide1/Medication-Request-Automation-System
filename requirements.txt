@@ -1,0 +1,8 @@
+flask
+python-telegram-bot
+sqlite3
+gtts
+requests
+flask-cors
+email-validator
+smtplib
